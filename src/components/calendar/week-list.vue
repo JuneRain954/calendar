@@ -13,7 +13,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, unref } from 'vue';
 import { useTouchEvent } from '../../utils/useTouchEvent/index';
 
 type List = Date[][]
@@ -24,7 +24,7 @@ const props = withDefaults(defineProps<{
   list: () => [],
 })
 
-let curDisplayWeek = 0;
+let curDisplayWeek = ref<number>(0);
 let eachWeekWidth: number = 0;
 let weekCount = props.list.length;
 
@@ -35,6 +35,16 @@ const styleConfig = computed(() => ({
   'transform': `translateX(${x.value}px)`,
   'transition-duration': `${duration.value}ms`,
 }))
+
+// 更新滚动距离
+const updateX = (val: number) => {
+  x.value = val;
+}
+
+// 更新动画持续时间
+const updateDuration = (ms: number) => {
+ duration.value = ms; 
+}
 
 const initCalendarWidth = () => {
   const el = document.querySelector('.calendar-warpper');
@@ -47,41 +57,65 @@ const initCalendarWidth = () => {
 // 监听 touch 事件
 const onTouchEvent = () => {
   const el = document.querySelector('.scroll-wrapper');
-  let touchStartInfo: Partial<Touch> = {};
+  type TouchStartInfo = Partial<Touch & { prevPageX: number, originX: number }>
+  let touchStartInfo: TouchStartInfo = {};
 
   const reset = ()  => {
     touchStartInfo = {};
-    x.value = 0;
   }
 
-  const onSwitch = (distance: number) => {
-    let targetDistance = 0;
-    if(distance > 0){
-      // 从左往右滑动
-      targetDistance = Math.max(--curDisplayWeek, 0) * eachWeekWidth;
-    } else {
-      // 从右往左滑动
-      targetDistance = (++curDisplayWeek % weekCount) * eachWeekWidth;
+  // 切换日历
+  const onSwitch = (distance: number, originX: number) => {
+    if(distance === 0) return;
+    const directionMap = {
+      SCROLL_PREV: 'scrollPrev',
+      SCROLL_NEXT: 'scrollNext',
+    };
+    const direction = distance > 0 ? directionMap.SCROLL_PREV : directionMap.SCROLL_NEXT; 
+    // 滑动距离大于等于日历组件宽度的一半才进行切换
+    const isNeedSwitch = Math.abs(distance) >= (eachWeekWidth / 2);
+    // 实际需要滚动的距离
+    let targetDistance = originX;
+    if(isNeedSwitch) {
+      // 需要切换，则计算目标块的距离
+      switch(direction){
+        case directionMap.SCROLL_PREV: {
+          // 从左往右滑动
+          curDisplayWeek.value = Math.max(--curDisplayWeek.value, 0);
+          targetDistance = unref(curDisplayWeek) * eachWeekWidth;
+          break;
+        }
+        case directionMap.SCROLL_NEXT: {
+          // 从右往左滑动
+          curDisplayWeek.value = Math.min(++curDisplayWeek.value, weekCount - 1);
+          targetDistance = -(unref(curDisplayWeek) * eachWeekWidth);
+          break;
+        }
+        default: {
+          break;
+        }
+      }
     }
-    console.log('[onSwitch] ==> ', targetDistance);
-    x.value = targetDistance;
+    updateX(targetDistance);
   }
 
   const onTouchStart = (e: TouchEvent) => {
-    duration.value = 0;
+    updateDuration(0);
     touchStartInfo = e.changedTouches[0];
+    touchStartInfo.prevPageX = touchStartInfo.pageX;
+    touchStartInfo.originX = x.value;
   }
  
   const onTouchMove = (e: TouchEvent) => {
-    let len = e.changedTouches[0].pageX - (touchStartInfo.pageX ?? 0);
-    x.value = len;
+    let len = e.changedTouches[0].pageX - (touchStartInfo.prevPageX ?? 0);
+    updateX(x.value + len);
+    touchStartInfo.prevPageX = e.changedTouches[0].pageX;
   }
 
   const onTouchEnd = (e: TouchEvent) => {
     let len = e.changedTouches[0].pageX - (touchStartInfo.pageX ?? 0);
-    onSwitch(len);
-    // x.value = len;
-    duration.value = 300;
+    onSwitch(len, touchStartInfo.originX ?? 0);
+    updateDuration(300);
     setTimeout(() => {
       reset();
     }, 50);
