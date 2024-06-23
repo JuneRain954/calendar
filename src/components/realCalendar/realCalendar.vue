@@ -7,20 +7,22 @@
       </template>
     </section>
     <!-- 日期列表 -->
-    <section class="scroll-container">
-      <template v-for="(monthList, key) in dateData" :key="key">
-        <section class="month-list">
-          <template v-for="weekList in monthList" :key="weekList[0].getDate()">
-            <section class="week-date-list">
-              <template v-for="date in weekList" :key="date.getDay()">
-                <div class="date">
-                  {{ date.getDate() }}
-                </div>
-              </template>
-            </section>
-          </template>
-        </section>
-      </template>
+    <section :class="['scroll-container', `${props.mode}-mode`]">
+      <div class="scroll-track">
+        <template v-for="(monthList, key) in dateData" :key="key">
+          <section class="month-list">
+            <template v-for="weekList in monthList" :key="weekList[0].getDate()">
+              <section class="week-date-list">
+                <template v-for="date in weekList" :key="date.getDay()">
+                  <div class="date">
+                    {{ date.getDate() }}
+                  </div>
+                </template>
+              </section>
+            </template>
+          </section>
+        </template>
+      </div>
     </section>
   </div>
 </template>
@@ -126,8 +128,8 @@ const fillMonthDateList = (list: Date[]) => {
   return targetList;
 }
 
-// 创建日期列表
-const createDateData = () => {
+// 创建月视图模式下的日期数据
+const createMonthViewDateData = () => {
   let dateData: Record<string, Date[][]> = {};
   const getMonthDateList = (data: Record<string, Date[][]>, [key, list]: [string, Date[]]) => {
     data[key] = fillMonthDateList(list);
@@ -137,15 +139,29 @@ const createDateData = () => {
   return dateData;
 }
 
+
+// 创建周视图模式下的日期数据
+const createWeekViewDateData = () => {
+  const { minDate: b, maxDate: e } = props;
+  const concatAllDate = (toList: Date[], fromList: Date[]) => [...toList, ...fromList];
+  const allDateList = Object.values(unref(baseDateData)).reduce(concatAllDate, []);
+  const targetAllDateList = fillMonthDateList(allDateList);
+  const key = `${b.getFullYear()}/${b.getMonth() + 1}-${e.getFullYear()}/${e.getMonth() + 1}`;
+  return { [key]: targetAllDateList };
+}
+
 const weekDescBaseList = ['日', '一', '二', '三', '四', '五', '六', '日', '一', '二', '三', '四', '五', '六'];
 const weekDescList = ref(createWeekDescList());
 const baseDateData = ref(createBaseDateData());
-const dateData = computed(() => createDateData());
+const dateData = computed(() => {
+  return props.mode === 'month' ? createMonthViewDateData() : createWeekViewDateData();
+});
 
 </script>
 
 <style lang="scss" scoped>
 .calendar-container {
+  --calendar-width: 311.33px;
   width: 100%;
   box-sizing: border-box;
   .week-desc-container {
@@ -167,26 +183,62 @@ const dateData = computed(() => createDateData());
     }
   }
   .scroll-container {
-    position: relative;
     width: 100%;
     box-sizing: border-box;
     overflow: hidden;
-    .month-list {
-      width: 100%;
-      box-sizing: border-box;
-      .week-date-list {
-        width: 100%;
+    // 月视图模式
+    &.month-mode {
+      .scroll-track {
+        position: relative;
+        display: inline-block;
+        white-space: nowrap;
+        .month-list {
+          position: relative;
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          .week-date-list {
+            width: 311.33px;
+          }
+        }
+      }
+    }
+    // 周视图模式
+    &.week-mode {
+      height: 48px;
+      .scroll-track {
+        position: relative;
+        display: inline-block;
+        .month-list {
+          width: auto;
+          position: relative;
+          white-space: nowrap;
+          display: inline-block;
+          .week-date-list {
+            width: 311.33px;
+            position: relative;
+          }
+        }
+      }
+    }
+    .scroll-track {
+      .month-list {
         box-sizing: border-box;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        font-size: 14px;
-        .date {
-          height: 48px;
-          line-height: 48px;
-          flex: 1;
-          color: rgba(0, 0, 0, 0.6);
+        .week-date-list {
+          width: 100%;
+          box-sizing: border-box;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          font-size: 14px;
+          .date {
+            height: 48px;
+            line-height: 48px;
+            flex: 1;
+            color: rgba(0, 0, 0, 0.6);
+          }
         }
       }
     }
